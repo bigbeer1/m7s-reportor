@@ -4,13 +4,13 @@
 
 
 ## 插件地址
-
+https://github.com/bigbeer1/m7s-reportor
 
 ## 插件引入
 
 ```go
 import (
-   
+   _ "github.com/bigbeer1/m7s-reportor"
 )
 ```
 
