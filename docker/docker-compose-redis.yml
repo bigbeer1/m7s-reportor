@@ -1,0 +1,30 @@
+# 描述 Compose 文件的版本信息
+version: "3"
+
+# 自动创建网络，并手动指定IP网段
+networks:
+  redis_net:
+    ipam:
+      config:
+        - subnet: 172.20.99.0/16
+
+
+# 定义服务，可以多个
+services:
+  redis: # 服务名称
+    image: redis:6.2.8 # 创建容器时所需的镜像
+    container_name: redis # 容器名称
+    restart: always
+    networks:
+      redis_net:
+         ipv4_address: 172.20.99.11
+    environment:
+      - REDISCLI_AUTH=G62m5301234567
+    ports:
+      - "6379:6379"
+      - "16379:16379"
+    volumes: # 数据卷，目录挂载
+      - ./redis/Shanghai:/etc/localtime
+      - ./redis/redis.conf:/etc/redis/redis.conf
+      - ./redis/hosts:/etc/hosts
+    command: redis-server /etc/redis/redis.conf
