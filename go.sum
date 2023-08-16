@@ -344,10 +344,10 @@ gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c/go.mod h1:K4uyk7z7BCEPqu6E+C
 gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
-m7s.live/engine/v4 v4.13.8 h1:pDl8YWxip5aTidw2Q4NuU+8A6irBraLRfoeBi42S6iQ=
-m7s.live/engine/v4 v4.13.8/go.mod h1:k/6iFSuJxmhJL8VO45NAga8BbgZHLLfRXOwCcCzk2s8=
-m7s.live/plugin/gb28181/v4 v4.3.9 h1:EDvozinlQbXsby5L+1/cxnmo+HnlQlm8JJ6rYEwOvO4=
-m7s.live/plugin/gb28181/v4 v4.3.9/go.mod h1:6lqP8AwhJOvaoOprdqhX9vbEB4Jg9eD/hT8kXpOJoJQ=
+m7s.live/engine/v4 v4.13.9 h1:XttLwLQQQSDDZ/oPiAs1jR6pUrd7ERpPk1CyBbjYCOk=
+m7s.live/engine/v4 v4.13.9/go.mod h1:k/6iFSuJxmhJL8VO45NAga8BbgZHLLfRXOwCcCzk2s8=
+m7s.live/plugin/gb28181/v4 v4.4.0 h1:wpVn6yxWat2QullzkTGVcEv1aXwRT+x7iyVowARKB0c=
+m7s.live/plugin/gb28181/v4 v4.4.0/go.mod h1:6lqP8AwhJOvaoOprdqhX9vbEB4Jg9eD/hT8kXpOJoJQ=
 m7s.live/plugin/ps/v4 v4.0.9 h1:79iHz546EdjhH2Op5IMXsjO0SK9tUk9AFSWKo0VON3w=
 m7s.live/plugin/ps/v4 v4.0.9/go.mod h1:v59bPt1T+IxuRLRchQ+PwKkLxTRuEY4tbo13lNX6JPc=
 rsc.io/pdf v0.1.1/go.mod h1:n8OzWcQ6Sp37PL01nO98y4iUCRdTGarVfzxY20ICaU4=

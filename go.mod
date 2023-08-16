@@ -6,8 +6,8 @@ require (
 	github.com/bytedance/sonic v1.9.2
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/go-redis/redis/v8 v8.11.5
-	m7s.live/engine/v4 v4.13.8
-	m7s.live/plugin/gb28181/v4 v4.3.9
+	m7s.live/engine/v4 v4.13.9
+	m7s.live/plugin/gb28181/v4 v4.4.0
 )
 
 require (

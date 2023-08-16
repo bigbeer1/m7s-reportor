@@ -27,7 +27,7 @@ type VideoChannel struct {
 	StreamPath       string `json:"stream_path"`        // 流通道地址
 	MonibucaId       string `json:"monibuca_id"`        // 服务器ID
 	MonibucaIp       string `json:"monibuca_ip"`        // 服务器IP
-	StreamState      string `json:"stream_state"`       // 流状态
+	StreamState      int64  `json:"stream_state"`       // 流状态
 	StreamCreateTime int64  `json:"stream_create_time"` // 流拉取时间
 	StreamType       string `json:"stream_type"`        // 流格式
 }
@@ -35,6 +35,7 @@ type VideoChannel struct {
 var reportorPlugin = InstallPlugin(new(ReportorConfig))
 
 func (p *ReportorConfig) OnEvent(event any) {
+
 	switch v := event.(type) {
 	case FirstConfig:
 		id, _ := machineid.ProtectedID("monibuca")
@@ -159,7 +160,7 @@ func (p *ReportorConfig) SyncVideoChannels() {
 			StreamPath:       streamPath,
 			MonibucaId:       p.MonibucaId,
 			MonibucaIp:       SysInfo.LocalIP,
-			StreamState:      stream.State.String(),
+			StreamState:      int64(stream.State),
 			StreamCreateTime: stream.StartTime.UnixMilli(),
 			StreamType:       stream.GetType(),
 		}
