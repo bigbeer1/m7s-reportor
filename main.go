@@ -6,21 +6,32 @@ import (
 	"github.com/bytedance/sonic"
 	"github.com/denisbrodbeck/machineid"
 	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	. "m7s.live/engine/v4"
 	. "m7s.live/plugin/gb28181/v4"
 	"time"
 )
 
 type ReportorConfig struct {
-	MonibucaId      string // m7sId 唯一标识
-	Host            string // redis地址
-	Type            string `default:",default=node,options=node|cluster"` // redis类型
-	Pass            string // redis密码
-	SyncServiceTime int64  `default:"30"`  // 同步服务器信息在线状态时间
-	SyncTime        int64  `default:"30"`  // 同步阻塞时间
-	SyncSaveTime    int64  `default:"180"` // 同步数据有效期时间
-	RedisCluster    *redis.ClusterClient
-	Redis           *redis.Client
+	MonibucaId string   // m7sId 唯一标识
+	RedisHost  []string // redis地址
+	RedisType  string   `default:",default=node,options=node|cluster"` // redis类型
+	RedisPass  string   // redis密码
+
+	EtcdHost        []string // etcd地址
+	EtcdUsername    string   // etcd用户名
+	EtcdPassword    string   // etcdPassword
+	EtcdDialTimeout int64    `default:"10"` // 通讯超时时间  秒
+
+	SyncServiceTime int64 `default:"30"`  // 同步服务器信息在线状态时间
+	SyncTime        int64 `default:"30"`  // 同步阻塞时间
+	SyncSaveTime    int64 `default:"180"` // 同步数据有效期时间
+
+	RedisCluster *redis.ClusterClient // redisCluster客户端
+	Redis        *redis.Client        // redis客户端
+
+	Etcd *clientv3.Client // etcd客户端
 }
 
 type VideoChannel struct {
@@ -39,23 +50,30 @@ func (p *ReportorConfig) OnEvent(event any) {
 	switch v := event.(type) {
 	case FirstConfig:
 		id, _ := machineid.ProtectedID("monibuca")
+		if id == "" {
+			id = uuid.NewString()
+		}
 		p.MonibucaId = id
 		fmt.Println(v)
 		// 创建redis 连接 判断是集群还是 单体
 
-		switch p.Type {
-		case "node":
-			//  单体redis
-			rdb := p.NewRedisManager()
-			p.Redis = rdb
+		if len(p.RedisHost) > 0 {
+			switch p.RedisType {
+			case "node":
+				//  单体redis
+				p.Redis = p.NewRedisManager()
 
-		case "cluster":
-			// 集群redis
-			rdb := p.NewRedisClusterManager()
-			p.RedisCluster = rdb
-		default:
-			reportorPlugin.Error(fmt.Sprintf("不支持redis类型:%s,请以node|cluster", p.Type))
-			return
+			case "cluster":
+				// 集群redis
+				p.RedisCluster = p.NewRedisClusterManager()
+
+			}
+		}
+
+		if len(p.EtcdHost) > 0 {
+			// etcd客户端
+			p.Etcd = p.NewEtcdManager()
+
 		}
 
 		// 同步服务器状态
@@ -95,27 +113,54 @@ func (p *ReportorConfig) SyncGBDevices() {
 			reportorPlugin.Error(fmt.Sprintf("gbDevices设备数据反序列化失败:%s", err.Error()))
 			return true
 		}
-		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
-		if p.Type == "node" {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if p.Redis != nil {
 			cmd := p.Redis.Set(ctx, publicKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return true
 			}
 			cmd = p.Redis.Set(ctx, privateKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return true
 			}
 		}
 
-		if p.Type == "cluster" {
+		if p.RedisCluster != nil {
 			cmd := p.RedisCluster.Set(ctx, publicKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return true
 			}
 			cmd = p.RedisCluster.Set(ctx, privateKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return true
+			}
+		}
+
+		if p.Etcd != nil {
+			leaseResp, err := p.Etcd.Grant(ctx, p.SyncSaveTime)
+			if err != nil {
+				reportorPlugin.Error(fmt.Sprintf("etcd创建lease失败:%s", err.Error()))
+				return true
+			}
+			// 写入键值对
+			_, err = p.Etcd.Put(ctx, publicKey, string(data), clientv3.WithLease(leaseResp.ID))
+			if err != nil {
+				reportorPlugin.Error(fmt.Sprintf("etcd存储失败:%s", err.Error()))
+				return true
+			}
+
+			// 写入键值对
+			_, err = p.Etcd.Put(ctx, privateKey, string(data), clientv3.WithLease(leaseResp.ID))
+			if err != nil {
+				reportorPlugin.Error(fmt.Sprintf("etcd存储失败:%s", err.Error()))
+				return true
 			}
 		}
 
@@ -131,19 +176,36 @@ func (p *ReportorConfig) SyncService() {
 		reportorPlugin.Error(fmt.Sprintf("m7sService设备数据反序列化失败:%s", err.Error()))
 		return
 	}
-	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
-	if p.Type == "node" {
+	if p.Redis != nil {
 		cmd := p.Redis.Set(ctx, key, data, time.Second*time.Duration(p.SyncSaveTime))
 		if cmd.Err() != nil {
 			reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+			return
 		}
 	}
 
-	if p.Type == "cluster" {
+	if p.RedisCluster != nil {
 		cmd := p.RedisCluster.Set(ctx, key, data, time.Second*time.Duration(p.SyncSaveTime))
 		if cmd.Err() != nil {
 			reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+			return
+		}
+	}
+
+	if p.Etcd != nil {
+		leaseResp, err := p.Etcd.Grant(ctx, p.SyncSaveTime)
+		if err != nil {
+			reportorPlugin.Error(fmt.Sprintf("etcd创建lease失败:%s", err.Error()))
+			return
+		}
+		// 写入键值对
+		_, err = p.Etcd.Put(ctx, key, string(data), clientv3.WithLease(leaseResp.ID))
+		if err != nil {
+			reportorPlugin.Error(fmt.Sprintf("etcd存储失败:%s", err.Error()))
+			return
 		}
 	}
 
@@ -170,31 +232,57 @@ func (p *ReportorConfig) SyncVideoChannels() {
 			reportorPlugin.Error(fmt.Sprintf("SyncVideoChannel设备数据反序列化失败:%s", err.Error()))
 			return
 		}
-		ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
 
-		if p.Type == "node" {
+		if p.Redis != nil {
 			cmd := p.Redis.Set(ctx, publicKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return
 			}
 
 			cmd = p.Redis.Set(ctx, privateKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return
 			}
 		}
 
-		if p.Type == "cluster" {
+		if p.RedisCluster != nil {
 			cmd := p.RedisCluster.Set(ctx, publicKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return
 			}
 
 			cmd = p.RedisCluster.Set(ctx, privateKey, data, time.Second*time.Duration(p.SyncSaveTime))
 			if cmd.Err() != nil {
 				reportorPlugin.Error(fmt.Sprintf("redis数据同步失败:%s", cmd.Err().Error()))
+				return
 			}
 
+		}
+
+		if p.Etcd != nil {
+			leaseResp, err := p.Etcd.Grant(ctx, p.SyncSaveTime)
+			if err != nil {
+				reportorPlugin.Error(fmt.Sprintf("etcd创建lease失败:%s", err.Error()))
+				return
+			}
+			// 写入键值对
+			_, err = p.Etcd.Put(ctx, publicKey, string(data), clientv3.WithLease(leaseResp.ID))
+			if err != nil {
+				reportorPlugin.Error(fmt.Sprintf("etcd存储失败:%s", err.Error()))
+				return
+			}
+
+			// 写入键值对
+			_, err = p.Etcd.Put(ctx, privateKey, string(data), clientv3.WithLease(leaseResp.ID))
+			if err != nil {
+				reportorPlugin.Error(fmt.Sprintf("etcd存储失败:%s", err.Error()))
+				return
+			}
 		}
 
 		return

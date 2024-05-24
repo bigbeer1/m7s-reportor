@@ -19,26 +19,45 @@ import (
 ```yaml
 
 reportor:
-  host: "127.0.0.1:6379"
-  type: "node"
-  pass: ""
-  syncservicetime: 30
-  synctime: 30
+  enable: true
+  redishost:
+    - "redis-1:6381"
+  redistype: "cluster"
+  redispass: "G62m5301234567"
+
+  etcdhost:
+    - "127.0.0.1:30000"
+  etcdusername: ""
+  etcdpassword: ""
+  etcddialtimeout: 10
+
+  syncservicetime: 10
+  synctime: 10
   syncsavetime: 180
+
 ```
 
 origin代表源服务器拉流地址前缀，可以由如下几种格式：
-```go 
+```
 type ReportorConfig struct {
-	MonibucaId      string // m7sId 唯一标识
-	Host            string // redis地址
-	Type            string `default:",default=node,options=node|cluster"` // redis类型
-	Pass            string // redis密码
-	SyncServiceTime int64  `default:"30"`  // 同步服务器信息在线状态时间
-	SyncTime        int64  `default:"30"`  // 同步阻塞时间
-	SyncSaveTime    int64  `default:"180"` // 同步数据有效期时间
-	RedisCluster    *redis.ClusterClient
-	Redis           *redis.Client
+    MonibucaId string   // m7sId 唯一标识
+    RedisHost  []string // redis地址
+    RedisType  string   `default:",default=node,options=node|cluster"` // redis类型
+    RedisPass  string   // redis密码
+
+    EtcdHost        []string // etcd地址
+    EtcdUsername    string   // etcd用户名
+    EtcdPassword    string   // etcdPassword
+    EtcdDialTimeout int64    `default:"10"` // 通讯超时时间  秒
+
+    SyncServiceTime int64 `default:"30"`  // 同步服务器信息在线状态时间
+    SyncTime        int64 `default:"30"`  // 同步阻塞时间
+    SyncSaveTime    int64 `default:"180"` // 同步数据有效期时间
+
+    RedisCluster *redis.ClusterClient // redisCluster客户端
+    Redis        *redis.Client        // redis客户端
+
+    Etcd *clientv3.Client // etcd客户端
 }
 ```
 
@@ -54,22 +73,22 @@ $ docker exec -it redis-1 redis-cli --cluster create 172.20.99.11:6381 172.20.99
 redis默认密码为 G62m5301234567  请自行修改
 
 ### reids 单体配置示例
-```go
-
+```
 reportor:
-  host: "127.0.0.1:6379"
-  type: "node"
-  pass: "G62m5301234567"
+  redishost: 
+    - "127.0.0.1:6379"
+  redistype: "node"
+  redispass: "G62m5301234567"
 ```
 
 
 ### reids 集群配置示例
-```go
-
+```
 reportor:
-  host: "redis-1:6379"
-  type: "cluster"
-  pass: "G62m5301234567"
+  redishost: 
+   - "redis-1:6379"
+  redistype: "cluster"
+  redispass: "G62m5301234567"
 ```
 如果在docker 内 需要修改 本地hosts文件  
 
@@ -80,4 +99,15 @@ reportor:
 127.0.0.1 redis-4
 127.0.0.1 redis-5
 127.0.0.1 redis-6
+```
+
+
+### etcd 集群配置示例
+```
+reportor:
+  etcdhost:
+    - "127.0.0.1:30000"
+  etcdusername: ""
+  etcdpassword: ""
+  etcddialtimeout: 10
 ```
