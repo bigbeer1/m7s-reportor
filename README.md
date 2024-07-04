@@ -1,3 +1,5 @@
+这是一个基于M7s编写的  数据上传同步插件
+
 # plugin-reportor
 数据同步上报插件——使得m7s实例可作把内存中信息同步到其他数据库中去：目前支持reids,redis-clusters
 
