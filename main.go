@@ -10,6 +10,7 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	. "m7s.live/engine/v4"
 	. "m7s.live/plugin/gb28181/v4"
+	"strings"
 	"time"
 )
 
@@ -32,12 +33,17 @@ type ReportorConfig struct {
 	Redis        *redis.Client        // redis客户端
 
 	Etcd *clientv3.Client // etcd客户端
+
+	MonibucaIp string // 用于设置MonibucaIp方便集群调度
+
+	MonibucaPort string //用于设置MonibucaPort方便集群调度
 }
 
 type VideoChannel struct {
 	StreamPath       string `json:"stream_path"`        // 流通道地址
 	MonibucaId       string `json:"monibuca_id"`        // 服务器ID
 	MonibucaIp       string `json:"monibuca_ip"`        // 服务器IP
+	MonibucaPort     string `json:"monibuca_port"`      // 服务器Port
 	StreamState      int64  `json:"stream_state"`       // 流状态
 	StreamCreateTime int64  `json:"stream_create_time"` // 流拉取时间
 	StreamType       string `json:"stream_type"`        // 流格式
@@ -54,6 +60,34 @@ func (p *ReportorConfig) OnEvent(event any) {
 			id = uuid.NewString()
 		}
 		p.MonibucaId = id
+
+		if p.MonibucaIp == "" {
+			// 分割 EngineConfig.ListenAddr 判断是否存在Ip和端口
+			listenAddrSplit := strings.Split(EngineConfig.ListenAddr, ":")
+			if len(listenAddrSplit) == 1 {
+				if p.MonibucaPort == "" {
+					p.MonibucaPort = listenAddrSplit[0]
+				}
+			}
+
+			if len(listenAddrSplit) == 2 {
+				p.MonibucaIp = listenAddrSplit[0]
+				if p.MonibucaPort == "" {
+					p.MonibucaPort = listenAddrSplit[1]
+				}
+			}
+
+			if p.MonibucaIp == "" {
+				sipIp, _ := sonic.Marshal(GB28181Plugin.RawConfig.Get("sipip"))
+				p.MonibucaIp = strings.ReplaceAll(string(sipIp), "\"", "")
+			}
+
+			if p.MonibucaIp == "" {
+				p.MonibucaIp = SysInfo.LocalIP
+			}
+
+		}
+
 		fmt.Println(v)
 		// 创建redis 连接 判断是集群还是 单体
 
@@ -73,7 +107,6 @@ func (p *ReportorConfig) OnEvent(event any) {
 		if len(p.EtcdHost) > 0 {
 			// etcd客户端
 			p.Etcd = p.NewEtcdManager()
-
 		}
 
 		// 同步服务器状态
@@ -168,14 +201,26 @@ func (p *ReportorConfig) SyncGBDevices() {
 	})
 }
 
+type M7sServiceInfo struct {
+	StartTime time.Time //启动时间
+	LocalIP   string
+	Port      string
+	Version   string
+}
+
 // 同步m7s服务端信息
 func (p *ReportorConfig) SyncService() {
 	key := fmt.Sprintf("m7sService:%v", p.MonibucaId)
-	data, err := sonic.Marshal(SysInfo)
+
+	// 获取m7s 全局变量SysInfo  重新组装 这样容器中IP就不会存在这里了
+	sysInfo := &M7sServiceInfo{StartTime: SysInfo.StartTime, LocalIP: p.MonibucaIp, Port: p.MonibucaPort, Version: SysInfo.Version}
+
+	data, err := sonic.Marshal(sysInfo)
 	if err != nil {
 		reportorPlugin.Error(fmt.Sprintf("m7sService设备数据反序列化失败:%s", err.Error()))
 		return
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -221,7 +266,8 @@ func (p *ReportorConfig) SyncVideoChannels() {
 		videoChannel := &VideoChannel{
 			StreamPath:       streamPath,
 			MonibucaId:       p.MonibucaId,
-			MonibucaIp:       SysInfo.LocalIP,
+			MonibucaIp:       p.MonibucaIp,
+			MonibucaPort:     p.MonibucaPort,
 			StreamState:      int64(stream.State),
 			StreamCreateTime: stream.StartTime.UnixMilli(),
 			StreamType:       stream.GetType(),

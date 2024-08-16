@@ -37,6 +37,9 @@ reportor:
   synctime: 10
   syncsavetime: 180
 
+  monibucaip:
+  monibucaport:
+
 ```
 
 origin代表源服务器拉流地址前缀，可以由如下几种格式：
@@ -60,6 +63,10 @@ type ReportorConfig struct {
     Redis        *redis.Client        // redis客户端
 
     Etcd *clientv3.Client // etcd客户端
+    
+    MonibucaIp string // 用于设置MonibucaIp方便集群调度
+
+	MonibucaPort string //用于设置MonibucaPort方便集群调度
 }
 ```
 
